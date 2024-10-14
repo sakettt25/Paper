@@ -16,10 +16,6 @@ import io.papermc.paper.registry.RegistryKey;
 import io.papermc.paper.registry.TypedKey;
 import io.papermc.testplugin.brigtests.example.ExampleAdminCommand;
 import io.papermc.testplugin.brigtests.example.MaterialArgumentType;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.defaults.BukkitCommand;
@@ -28,11 +24,16 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
 public final class Registration {
-    
+
     private Registration() {
     }
-    
+
     public static void registerViaOnEnable(final JavaPlugin plugin) {
         registerLegacyCommands(plugin);
         registerViaLifecycleEvents(plugin);
@@ -42,42 +43,34 @@ public final class Registration {
         final LifecycleEventManager<Plugin> lifecycleManager = plugin.getLifecycleManager();
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             final Commands commands = event.registrar();
+
             commands.register(Commands.literal("ench")
-                .then(
-                    Commands.argument("name", ArgumentTypes.resource(RegistryKey.ENCHANTMENT))
-                        .executes(ctx -> {
-                            ctx.getSource().getSender().sendPlainMessage(ctx.getArgument("name", Enchantment.class).toString());
-                            return Command.SINGLE_SUCCESS;
-                        })
+                .then(Commands.argument("name", ArgumentTypes.resource(RegistryKey.ENCHANTMENT))
+                    .executes(ctx -> sendMessage(ctx.getSource().getSender(), ctx.getArgument("name", Enchantment.class).toString()))
                 ).build()
             );
+
             commands.register(Commands.literal("ench-key")
-                .then(
-                    Commands.argument("key", ArgumentTypes.resourceKey(RegistryKey.ENCHANTMENT))
-                        .executes(ctx -> {
-                            final TypedKey<Enchantment> key = RegistryArgumentExtractor.getTypedKey(ctx, RegistryKey.ENCHANTMENT, "key");
-                            ctx.getSource().getSender().sendPlainMessage(key.toString());
-                            return Command.SINGLE_SUCCESS;
-                        })
+                .then(Commands.argument("key", ArgumentTypes.resourceKey(RegistryKey.ENCHANTMENT))
+                    .executes(ctx -> {
+                        final TypedKey<Enchantment> key = RegistryArgumentExtractor.getTypedKey(ctx, RegistryKey.ENCHANTMENT, "key");
+                        return sendMessage(ctx.getSource().getSender(), key.toString());
+                    })
                 ).build()
             );
+
             commands.register(Commands.literal("fine-pos")
-                  .then(
-                      Commands.argument("pos", ArgumentTypes.finePosition(false))
-                          .executes(ctx -> {
-                              final FinePositionResolver position = ctx.getArgument("pos", FinePositionResolver.class);
-                              ctx.getSource().getSender().sendPlainMessage("Position: " + position.resolve(ctx.getSource()));
-                              return Command.SINGLE_SUCCESS;
-                          })
-                  ).build()
-            );
-            // ensure plugin commands override
-            commands.register(Commands.literal("tag")
+                .then(Commands.argument("pos", ArgumentTypes.finePosition(false))
                     .executes(ctx -> {
-                        ctx.getSource().getSender().sendPlainMessage("overriden command");
-                        return Command.SINGLE_SUCCESS;
+                        final FinePositionResolver position = ctx.getArgument("pos", FinePositionResolver.class);
+                        return sendMessage(ctx.getSource().getSender(), "Position: " + position.resolve(ctx.getSource()));
                     })
-                    .build(),
+                ).build()
+            );
+
+            commands.register(Commands.literal("tag")
+                .executes(ctx -> sendMessage(ctx.getSource().getSender(), "overridden command"))
+                .build(),
                 null,
                 Collections.emptyList()
             );
@@ -85,76 +78,64 @@ public final class Registration {
 
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS.newHandler(event -> {
             final Commands commands = event.registrar();
+
             commands.register(plugin.getPluginMeta(), Commands.literal("root_command")
-                    .then(Commands.literal("sub_command")
-                        .requires(source -> source.getSender().hasPermission("testplugin.test"))
-                        .executes(ctx -> {
-                            ctx.getSource().getSender().sendPlainMessage("root_command sub_command");
-                            return Command.SINGLE_SUCCESS;
-                        })).build(),
+                .then(Commands.literal("sub_command")
+                    .requires(source -> source.getSender().hasPermission("testplugin.test"))
+                    .executes(ctx -> sendMessage(ctx.getSource().getSender(), "root_command sub_command"))
+                ).build(),
                 null,
                 Collections.emptyList()
             );
 
             commands.register(plugin.getPluginMeta(), "example", "test", Collections.emptyList(), new BasicCommand() {
                 @Override
-                public void execute(@NotNull final CommandSourceStack commandSourceStack, final @NotNull String @NotNull [] args) {
+                public void execute(@NotNull final CommandSourceStack commandSourceStack, final @NotNull String @NotNull[] args) {
                     System.out.println(Arrays.toString(args));
                 }
 
                 @Override
-                public @NotNull Collection<String> suggest(final @NotNull CommandSourceStack commandSourceStack, final @NotNull String @NotNull [] args) {
+                public @NotNull Collection<String> suggest(final @NotNull CommandSourceStack commandSourceStack, final @NotNull String @NotNull[] args) {
                     System.out.println(Arrays.toString(args));
                     return List.of("apple", "banana");
                 }
             });
 
-
             commands.register(plugin.getPluginMeta(), Commands.literal("water")
+                .requires(source -> {
+                    System.out.println("isInWater check");
+                    return source.getExecutor().isInWater();
+                })
+                .executes(ctx -> sendMessage(ctx.getSource().getExecutor(), "You are in water!"))
+                .then(Commands.literal("lava")
                     .requires(source -> {
-                        System.out.println("isInWater check");
-                        return source.getExecutor().isInWater();
+                        System.out.println("isInLava check");
+                        return source.getExecutor() != null && source.getExecutor().isInLava();
                     })
-                    .executes(ctx -> {
-                        ctx.getSource().getExecutor().sendMessage("You are in water!");
-                        return Command.SINGLE_SUCCESS;
-                    }).then(Commands.literal("lava")
-                        .requires(source -> {
-                            System.out.println("isInLava check");
-                            if (source.getExecutor() != null) {
-                                return source.getExecutor().isInLava();
-                            }
-                            return true;
-                        })
-                        .executes(ctx -> {
-                            ctx.getSource().getExecutor().sendMessage("You are in lava!");
-                            return Command.SINGLE_SUCCESS;
-                        })).build(),
+                    .executes(ctx -> sendMessage(ctx.getSource().getExecutor(), "You are in lava!"))
+                ).build(),
                 null,
-                Collections.emptyList());
-
+                Collections.emptyList()
+            );
 
             ExampleAdminCommand.register(plugin, commands);
         }).priority(10));
     }
 
     private static void registerLegacyCommands(final JavaPlugin plugin) {
-        plugin.getServer().getCommandMap().register("fallback", new BukkitCommand("hi", "cool hi command", "<>", List.of("hialias")) {
+        registerLegacyCommand(plugin, "hi", "cool hi command", List.of("hialias"));
+        registerLegacyCommand(plugin, "cooler-command", "cool hi command", List.of("cooler-command-alias"));
+
+        plugin.getServer().getCommandMap().getKnownCommands().values().removeIf(command -> command.getName().equals("hi"));
+    }
+
+    private static void registerLegacyCommand(JavaPlugin plugin, String name, String description, List<String> aliases) {
+        plugin.getServer().getCommandMap().register("fallback", new BukkitCommand(name, description, "<>", aliases) {
             @Override
             public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
                 sender.sendMessage("hi");
                 return true;
             }
-        });
-        plugin.getServer().getCommandMap().register("fallback", new BukkitCommand("cooler-command", "cool hi command", "<>", List.of("cooler-command-alias")) {
-            @Override
-            public boolean execute(@NotNull CommandSender sender, @NotNull String commandLabel, @NotNull String[] args) {
-                sender.sendMessage("hi");
-                return true;
-            }
-        });
-        plugin.getServer().getCommandMap().getKnownCommands().values().removeIf((command) -> {
-            return command.getName().equals("hi");
         });
     }
 
@@ -163,22 +144,16 @@ public final class Registration {
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             final Commands commands = event.registrar();
             commands.register(Commands.literal("material")
-                    .then(Commands.literal("item")
-                        .then(Commands.argument("mat", MaterialArgumentType.item())
-                            .executes(ctx -> {
-                                ctx.getSource().getSender().sendPlainMessage(ctx.getArgument("mat", Material.class).name());
-                                return Command.SINGLE_SUCCESS;
-                            })
-                        )
-                    ).then(Commands.literal("block")
-                        .then(Commands.argument("mat", MaterialArgumentType.block())
-                            .executes(ctx -> {
-                                ctx.getSource().getSender().sendPlainMessage(ctx.getArgument("mat", Material.class).name());
-                                return Command.SINGLE_SUCCESS;
-                            })
-                        )
+                .then(Commands.literal("item")
+                    .then(Commands.argument("mat", MaterialArgumentType.item())
+                        .executes(ctx -> sendMessage(ctx.getSource().getSender(), ctx.getArgument("mat", Material.class).name()))
                     )
-                    .build(),
+                )
+                .then(Commands.literal("block")
+                    .then(Commands.argument("mat", MaterialArgumentType.block())
+                        .executes(ctx -> sendMessage(ctx.getSource().getSender(), ctx.getArgument("mat", Material.class).name()))
+                    )
+                ).build(),
                 null,
                 Collections.emptyList()
             );
@@ -187,15 +162,22 @@ public final class Registration {
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS.newHandler(event -> {
             final Commands commands = event.registrar();
             commands.register(Commands.literal("heya")
-                    .then(Commands.argument("range", ArgumentTypes.doubleRange())
-                        .executes((ct) -> {
-                            ct.getSource().getSender().sendPlainMessage(ct.getArgument("range", DoubleRangeProvider.class).range().toString());
-                            return 1;
-                        })
-                    ).build(),
+                .then(Commands.argument("range", ArgumentTypes.doubleRange())
+                    .executes(ctx -> sendMessage(ctx.getSource().getSender(), ctx.getArgument("range", DoubleRangeProvider.class).range().toString()))
+                ).build(),
                 null,
                 Collections.emptyList()
             );
         }).priority(10));
+    }
+
+    private static int sendMessage(CommandSender sender, String message) {
+        sender.sendMessage(message);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int sendMessage(CommandSourceStack source, String message) {
+        source.getSender().sendPlainMessage(message);
+        return Command.SINGLE_SUCCESS;
     }
 }
